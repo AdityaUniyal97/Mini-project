@@ -29,13 +29,13 @@ const genreMap = {
     37: "Western"
 };
 
-// Helper to get a safe discover URL with random pages and strict adult filters
-function getSafeDiscoverUrl() {
-    // Randomize page (1 to 3) so movies change on refresh
-    const randomPage = Math.floor(Math.random() * 3) + 1;
+// Helper to get a safe discover URL with strict adult filters
+function getSafeDiscoverUrl(randomizePage = false) {
+    // Only randomize page for broad queries (like trending) to avoid empty pages on strict filters
+    const page = randomizePage ? Math.floor(Math.random() * 3) + 1 : 1;
     // include_adult=false removes explicit content
-    // certification_country=IN & certification.lte=UA filters out 'A' (Adult) rated Indian movies
-    return `${BASE_URL}/discover/movie?api_key=${API_KEY}&with_original_language=hi&include_adult=false&certification_country=IN&certification.lte=UA&page=${randomPage}`;
+    // Note: Removed certification_country=IN as it blocks 90% of valid Hindi movies on TMDB due to missing data
+    return `${BASE_URL}/discover/movie?api_key=${API_KEY}&with_original_language=hi&include_adult=false&page=${page}`;
 }
 
 // Initialize the page
@@ -121,7 +121,7 @@ function searchMovies(query) {
 // 2. Filter by Time (Runtime)
 function filterByTime(minTime, maxTime) {
     showLoading('time-results');
-    let url = `${getSafeDiscoverUrl()}&sort_by=popularity.desc`;
+    let url = `${getSafeDiscoverUrl(false)}&sort_by=popularity.desc`;
     if (minTime) url += `&with_runtime.gte=${minTime}`;
     if (maxTime) url += `&with_runtime.lte=${maxTime}`;
 
@@ -139,7 +139,7 @@ function filterByTime(minTime, maxTime) {
 // 3. Filter by Genre
 function filterByGenre(genreId) {
     showLoading('genre-results');
-    fetch(`${getSafeDiscoverUrl()}&with_genres=${genreId}&sort_by=popularity.desc`)
+    fetch(`${getSafeDiscoverUrl(false)}&with_genres=${genreId}&sort_by=popularity.desc`)
         .then(response => response.json())
         .then(data => {
             displayMovies(data.results, 'genre-results');
@@ -153,7 +153,7 @@ function filterByGenre(genreId) {
 // 4. Filter by Rating
 function filterByRating(minRating) {
     showLoading('rating-results');
-    fetch(`${getSafeDiscoverUrl()}&vote_average.gte=${minRating}&vote_count.gte=50&sort_by=vote_average.desc`)
+    fetch(`${getSafeDiscoverUrl(false)}&vote_average.gte=${minRating}&vote_count.gte=50&sort_by=vote_average.desc`)
         .then(response => response.json())
         .then(data => {
             displayMovies(data.results, 'rating-results');
@@ -167,7 +167,7 @@ function filterByRating(minRating) {
 // 5. Load Trending Movies
 function loadTrending() {
     showLoading('trending-results');
-    fetch(`${getSafeDiscoverUrl()}&sort_by=popularity.desc`)
+    fetch(`${getSafeDiscoverUrl(true)}&sort_by=popularity.desc`)
         .then(response => response.json())
         .then(data => {
             displayMovies(data.results, 'trending-results');
@@ -207,7 +207,7 @@ function useFriendCode() {
             const genresString = genreIds.join('|');
             showLoading('friends-results');
             
-            fetch(`${getSafeDiscoverUrl()}&with_genres=${encodeURIComponent(genresString)}&sort_by=popularity.desc`)
+            fetch(`${getSafeDiscoverUrl(false)}&with_genres=${genresString}&sort_by=popularity.desc`)
                 .then(response => response.json())
                 .then(data => {
                     displayMovies(data.results, 'friends-results');
@@ -258,7 +258,7 @@ function loadBecauseYouWatched() {
         // Take top 3 genres to avoid overly restrictive queries
         const genresToSearch = uniqueGenres.slice(0, 3).join('|');
         
-        fetch(`${getSafeDiscoverUrl()}&with_genres=${encodeURIComponent(genresToSearch)}&sort_by=popularity.desc`)
+        fetch(`${getSafeDiscoverUrl(false)}&with_genres=${genresToSearch}&sort_by=popularity.desc`)
             .then(response => response.json())
             .then(data => {
                 // Filter out movies already watched
