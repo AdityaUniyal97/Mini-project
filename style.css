@@ -252,4 +252,39 @@ footer {
     .nav-links {
         display: none;
     }
+    
+    .movie-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+    }
+    
+    .movie-poster {
+        height: 200px;
+    }
+    
+    .movie-title {
+        font-size: 0.9rem;
+    }
+    
+    .movie-meta, .movie-genres {
+        font-size: 0.75rem;
+    }
+    
+    .movie-rating {
+        font-size: 0.7rem;
+        padding: 0.1rem 0.3rem;
+    }
+    
+    .controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .time-btn, .genre-btn {
+        width: 100%;
+    }
+    
+    .friends-container {
+        flex-direction: column;
+    }
 }

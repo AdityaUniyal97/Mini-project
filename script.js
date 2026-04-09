@@ -29,6 +29,15 @@ const genreMap = {
     37: "Western"
 };
 
+// Helper to get a safe discover URL with random pages and strict adult filters
+function getSafeDiscoverUrl() {
+    // Randomize page (1 to 3) so movies change on refresh
+    const randomPage = Math.floor(Math.random() * 3) + 1;
+    // include_adult=false removes explicit content
+    // certification_country=IN & certification.lte=UA filters out 'A' (Adult) rated Indian movies
+    return `${BASE_URL}/discover/movie?api_key=${API_KEY}&with_original_language=hi&include_adult=false&certification_country=IN&certification.lte=UA&page=${randomPage}`;
+}
+
 // Initialize the page
 document.addEventListener('DOMContentLoaded', () => {
     loadTrending();
@@ -92,9 +101,8 @@ function showNoResults(containerId) {
 // 1. Search Movies
 function searchMovies(query) {
     showLoading('search-results');
-    // TMDB search doesn't easily filter by original_language in the search endpoint, 
-    // so we search and then filter the results manually.
-    fetch(`${BASE_URL}/search/movie?api_key=${API_KEY}&query=${encodeURIComponent(query)}`)
+    // Added include_adult=false to search
+    fetch(`${BASE_URL}/search/movie?api_key=${API_KEY}&query=${encodeURIComponent(query)}&include_adult=false`)
         .then(response => response.json())
         .then(data => {
             if (data.results) {
@@ -111,10 +119,9 @@ function searchMovies(query) {
 }
 
 // 2. Filter by Time (Runtime)
-// TMDB discover endpoint allows filtering by with_runtime.lte and with_runtime.gte
 function filterByTime(minTime, maxTime) {
     showLoading('time-results');
-    let url = `${BASE_URL}/discover/movie?api_key=${API_KEY}&with_original_language=hi&sort_by=popularity.desc`;
+    let url = `${getSafeDiscoverUrl()}&sort_by=popularity.desc`;
     if (minTime) url += `&with_runtime.gte=${minTime}`;
     if (maxTime) url += `&with_runtime.lte=${maxTime}`;
 
@@ -132,7 +139,7 @@ function filterByTime(minTime, maxTime) {
 // 3. Filter by Genre
 function filterByGenre(genreId) {
     showLoading('genre-results');
-    fetch(`${BASE_URL}/discover/movie?api_key=${API_KEY}&with_original_language=hi&with_genres=${genreId}&sort_by=popularity.desc`)
+    fetch(`${getSafeDiscoverUrl()}&with_genres=${genreId}&sort_by=popularity.desc`)
         .then(response => response.json())
         .then(data => {
             displayMovies(data.results, 'genre-results');
@@ -146,7 +153,7 @@ function filterByGenre(genreId) {
 // 4. Filter by Rating
 function filterByRating(minRating) {
     showLoading('rating-results');
-    fetch(`${BASE_URL}/discover/movie?api_key=${API_KEY}&with_original_language=hi&vote_average.gte=${minRating}&vote_count.gte=50&sort_by=vote_average.desc`)
+    fetch(`${getSafeDiscoverUrl()}&vote_average.gte=${minRating}&vote_count.gte=50&sort_by=vote_average.desc`)
         .then(response => response.json())
         .then(data => {
             displayMovies(data.results, 'rating-results');
@@ -160,9 +167,7 @@ function filterByRating(minRating) {
 // 5. Load Trending Movies
 function loadTrending() {
     showLoading('trending-results');
-    // TMDB doesn't have a direct "trending by language" endpoint, 
-    // so we use discover sorted by popularity for Hindi movies
-    fetch(`${BASE_URL}/discover/movie?api_key=${API_KEY}&with_original_language=hi&sort_by=popularity.desc&page=1`)
+    fetch(`${getSafeDiscoverUrl()}&sort_by=popularity.desc`)
         .then(response => response.json())
         .then(data => {
             displayMovies(data.results, 'trending-results');
@@ -202,7 +207,7 @@ function useFriendCode() {
             const genresString = genreIds.join(',');
             showLoading('friends-results');
             
-            fetch(`${BASE_URL}/discover/movie?api_key=${API_KEY}&with_original_language=hi&with_genres=${genresString}&sort_by=popularity.desc`)
+            fetch(`${getSafeDiscoverUrl()}&with_genres=${genresString}&sort_by=popularity.desc`)
                 .then(response => response.json())
                 .then(data => {
                     displayMovies(data.results, 'friends-results');
@@ -253,7 +258,7 @@ function loadBecauseYouWatched() {
         // Take top 3 genres to avoid overly restrictive queries
         const genresToSearch = uniqueGenres.slice(0, 3).join(',');
         
-        fetch(`${BASE_URL}/discover/movie?api_key=${API_KEY}&with_original_language=hi&with_genres=${genresToSearch}&sort_by=popularity.desc`)
+        fetch(`${getSafeDiscoverUrl()}&with_genres=${genresToSearch}&sort_by=popularity.desc`)
             .then(response => response.json())
             .then(data => {
                 // Filter out movies already watched
@@ -320,8 +325,25 @@ function displayMovies(movies, containerId, isWatchedList = false) {
         return;
     }
     
+    // Manual safety filter to catch softcore titles that might bypass TMDB's adult filter
+    const safeMovies = movies.filter(movie => {
+        const title = (movie.title || '').toLowerCase();
+        return !title.includes('mimi cucu') && 
+               !title.includes('ullu') && 
+               !title.includes('charmsukh') &&
+               !title.includes('palang tod');
+    });
+
+    if (safeMovies.length === 0) {
+        showNoResults(containerId);
+        return;
+    }
+    
+    // Shuffle the movies so they change on refresh (unless it's the watched list)
+    const moviesToProcess = isWatchedList ? safeMovies : safeMovies.sort(() => 0.5 - Math.random());
+    
     // Display up to 12 movies for better UI
-    const moviesToShow = movies.slice(0, 12);
+    const moviesToShow = moviesToProcess.slice(0, 12);
     
     moviesToShow.forEach(movie => {
         const card = createMovieCard(movie, isWatchedList);
