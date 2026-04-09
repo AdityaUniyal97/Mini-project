@@ -204,10 +204,10 @@ function useFriendCode() {
         const genreIds = JSON.parse(jsonString);
         
         if (Array.isArray(genreIds) && genreIds.length > 0) {
-            const genresString = genreIds.join(',');
+            const genresString = genreIds.join('|');
             showLoading('friends-results');
             
-            fetch(`${getSafeDiscoverUrl()}&with_genres=${genresString}&sort_by=popularity.desc`)
+            fetch(`${getSafeDiscoverUrl()}&with_genres=${encodeURIComponent(genresString)}&sort_by=popularity.desc`)
                 .then(response => response.json())
                 .then(data => {
                     displayMovies(data.results, 'friends-results');
@@ -256,9 +256,9 @@ function loadBecauseYouWatched() {
     
     if (uniqueGenres.length > 0) {
         // Take top 3 genres to avoid overly restrictive queries
-        const genresToSearch = uniqueGenres.slice(0, 3).join(',');
+        const genresToSearch = uniqueGenres.slice(0, 3).join('|');
         
-        fetch(`${getSafeDiscoverUrl()}&with_genres=${genresToSearch}&sort_by=popularity.desc`)
+        fetch(`${getSafeDiscoverUrl()}&with_genres=${encodeURIComponent(genresToSearch)}&sort_by=popularity.desc`)
             .then(response => response.json())
             .then(data => {
                 // Filter out movies already watched
