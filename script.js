@@ -34,15 +34,59 @@ function getSafeDiscoverUrl(randomizePage = false) {
     // Only randomize page for broad queries (like trending) to avoid empty pages on strict filters
     const page = randomizePage ? Math.floor(Math.random() * 3) + 1 : 1;
     // include_adult=false removes explicit content
-    // Note: Removed certification_country=IN as it blocks 90% of valid Hindi movies on TMDB due to missing data
-    return `${BASE_URL}/discover/movie?api_key=${API_KEY}&with_original_language=hi&include_adult=false&page=${page}`;
+    // primary_release_date.gte=2022-01-01 to only show recent movies
+    return `${BASE_URL}/discover/movie?api_key=${API_KEY}&with_original_language=hi&include_adult=false&primary_release_date.gte=2022-01-01&page=${page}`;
 }
 
 // Initialize the page
 document.addEventListener('DOMContentLoaded', () => {
+    loadTopCharts();
     loadTrending();
     setupEventListeners();
+    loadSavedFilters();
 });
+
+// Load saved filters on page refresh
+function loadSavedFilters() {
+    // 1. Load saved time filter
+    const savedMinTime = localStorage.getItem('selectedMinTime');
+    const savedMaxTime = localStorage.getItem('selectedMaxTime');
+    
+    if (savedMinTime !== null || savedMaxTime !== null) {
+        document.querySelectorAll('.time-btn').forEach(btn => {
+            if ((btn.dataset.min || "") === (savedMinTime || "") && 
+                (btn.dataset.max || "") === (savedMaxTime || "")) {
+                btn.classList.add('active');
+            }
+        });
+        filterByTime(savedMinTime, savedMaxTime);
+    }
+
+    // 2. Load saved genre filter
+    const savedGenre = localStorage.getItem('selectedGenre');
+    if (savedGenre) {
+        document.querySelectorAll('.genre-btn').forEach(btn => {
+            if (btn.dataset.id === savedGenre) {
+                btn.classList.add('active');
+            }
+        });
+        filterByGenre(savedGenre);
+    }
+
+    // 3. Load saved rating filter
+    const savedRating = localStorage.getItem('selectedRating');
+    if (savedRating) {
+        const ratingSlider = document.getElementById('rating-slider');
+        const ratingValue = document.getElementById('rating-value');
+        
+        ratingSlider.value = savedRating;
+        ratingValue.textContent = savedRating;
+        filterByRating(savedRating);
+    } else {
+        // Fetch default rating on load to populate the section
+        filterByRating(document.getElementById('rating-slider').value);
+    }
+}
 
 // Setup all event listeners
 function setupEventListeners() {
@@ -55,8 +99,16 @@ function setupEventListeners() {
     // 2. Time-Based
     document.querySelectorAll('.time-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            const maxTime = e.target.dataset.max;
-            const minTime = e.target.dataset.min;
+            document.querySelectorAll('.time-btn').forEach(b => b.classList.remove('active'));
+            e.target.classList.add('active');
+
+            const maxTime = e.target.dataset.max || "";
+            const minTime = e.target.dataset.min || "";
+            
+            // Save to localStorage
+            localStorage.setItem('selectedMinTime', minTime);
+            localStorage.setItem('selectedMaxTime', maxTime);
+            
             filterByTime(minTime, maxTime);
         });
     });
@@ -64,7 +116,12 @@ function setupEventListeners() {
     // 3. Genre-Based
     document.querySelectorAll('.genre-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
+            document.querySelectorAll('.genre-btn').forEach(b => b.classList.remove('active'));
+            e.target.classList.add('active');
+
             const genreId = e.target.dataset.id;
+            // Save to localStorage
+            localStorage.setItem('selectedGenre', genreId);
             filterByGenre(genreId);
         });
     });
@@ -78,7 +135,10 @@ function setupEventListeners() {
     });
     
     ratingSlider.addEventListener('change', (e) => {
-        filterByRating(e.target.value);
+        const rating = e.target.value;
+        // Save to localStorage
+        localStorage.setItem('selectedRating', rating);
+        filterByRating(rating);
     });
 
     // 6. Friends Feature
@@ -176,6 +236,66 @@ function loadTrending() {
             console.error('Error loading trending:', error);
             showNoResults('trending-results');
         });
+}
+
+// 5b. Load Top Charts
+function loadTopCharts() {
+    showLoading('top-charts-results');
+    // Top charts uses 2020-01-01 as minimum date, ignoring the 2022 global filter
+    const url = `${BASE_URL}/discover/movie?api_key=${API_KEY}&with_original_language=hi&include_adult=false&primary_release_date.gte=2020-01-01&vote_count.gte=1000&sort_by=vote_average.desc&page=1`;
+    
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            const container = document.getElementById('top-charts-results');
+            container.innerHTML = '';
+            // Safe filter
+            const safeMovies = data.results.filter(movie => {
+                const title = (movie.title || '').toLowerCase();
+                return !title.includes('mimi cucu') && 
+                       !title.includes('ullu') && 
+                       !title.includes('charmsukh') &&
+                       !title.includes('palang tod');
+            });
+
+            if (safeMovies && safeMovies.length > 0) {
+                const top10 = safeMovies.slice(0, 10);
+                top10.forEach((movie, index) => {
+                    const item = createChartItem(movie, index + 1);
+                    container.appendChild(item);
+                });
+            } else {
+                showNoResults('top-charts-results');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading top charts:', error);
+            showNoResults('top-charts-results');
+        });
+}
+
+// Helper to create leaderboard item
+function createChartItem(movie, rank) {
+    const item = document.createElement('div');
+    item.className = 'chart-item';
+    
+    const posterPath = movie.poster_path 
+        ? `${IMG_URL}${movie.poster_path}` 
+        : 'https://via.placeholder.com/60x90?text=No+Poster';
+        
+    const year = movie.release_date ? movie.release_date.substring(0, 4) : 'N/A';
+    const rating = movie.vote_average ? movie.vote_average.toFixed(1) : 'NR';
+    
+    item.innerHTML = `
+        <div class="chart-rank">#${rank}</div>
+        <img src="${posterPath}" alt="${movie.title}" class="chart-poster" onclick="window.open('https://www.themoviedb.org/movie/${movie.id}', '_blank')">
+        <div class="chart-details">
+            <div class="chart-title" onclick="window.open('https://www.themoviedb.org/movie/${movie.id}', '_blank')">${movie.title}</div>
+            <div class="chart-meta">${year} • ⭐ ${rating}</div>
+        </div>
+    `;
+    
+    return item;
 }
 
 // 6a. Generate Friend Code
