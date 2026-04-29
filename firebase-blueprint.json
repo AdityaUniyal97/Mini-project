@@ -1,0 +1,43 @@
+{
+  "entities": {
+    "FriendCode": {
+      "title": "FriendCode",
+      "description": "Represents a generated unique code for sharing genres",
+      "type": "object",
+      "properties": {
+        "genres": {
+          "type": "array",
+          "description": "List of selected genre ids"
+        },
+        "createdAt": {
+          "type": "number",
+          "description": "Timestamp when the code was created"
+        }
+      },
+      "required": ["genres", "createdAt"]
+    },
+    "WatchHistory": {
+      "title": "WatchHistory",
+      "description": "Global watch history since there's no auth",
+      "type": "object",
+      "properties": {
+        "id": { "type": "number" },
+        "title": { "type": "string" },
+        "poster": { "type": "string" },
+        "genres": { "type": "array" },
+        "watchedAt": { "type": "number" }
+      },
+      "required": ["id", "title", "poster", "genres", "watchedAt"]
+    }
+  },
+  "firestore": {
+    "friendCodes/{codeId}": {
+      "schema": { "$ref": "#/entities/FriendCode" },
+      "description": "Store friend codes for sharing"
+    },
+    "watchHistory/{movieId}": {
+      "schema": { "$ref": "#/entities/WatchHistory" },
+      "description": "Store global watch history for all users"
+    }
+  }
+}

@@ -3,49 +3,44 @@ const API_KEY = '99134078b2f14cae69a98ffb4884afed';
 const BASE_URL = 'https://api.themoviedb.org/3';
 const IMG_URL = 'https://image.tmdb.org/t/p/w500';
 
-// JSONBin for Cross-Device Sync
-// Steps to use cross-device sync:
-// 1. Go to jsonbin.io, sign up for free
-// 2. Get your JSONBin API Key and put it below
-// 3. Create a new empty bin with just {} as content and put its Bin ID below
-const JSONBIN_API_KEY = 'YOUR_JSONBIN_API_KEY'; 
-const JSONBIN_BIN_ID = 'YOUR_JSONBIN_BIN_ID';
+/* SETUP STEPS:
+1. Go to firebase.google.com
+2. Click Get Started — it is free
+3. Create new project — name it CineMatch
+4. Go to Realtime Database — create database
+5. Set rules to public for now (for student project)
+6. Copy your config and paste it above
+7. Done!
+
+Firebase Database Rules to Set
+{
+  "rules": {
+    ".read": true,
+    ".write": true
+  }
+}
+*/
+
+// Firebase Config
+import { initializeApp } from "firebase/app";
+import { getDatabase, ref, set, get, child } from "firebase/database";
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyBNhTPANQvIYIO5RsmKucbSNpiLLAYt1o4",
+  authDomain: "gen-lang-client-0934972792.firebaseapp.com",
+  databaseURL: "https://gen-lang-client-0934972792-default-rtdb.firebaseio.com/",
+  projectId: "gen-lang-client-0934972792",
+  storageBucket: "gen-lang-client-0934972792.firebasestorage.app",
+  messagingSenderId: "319110590864",
+  appId: "1:319110590864:web:c8af07d71683bfa6808315"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app); // Using Realtime Database
 
 // Global state for watched movies
 let watchedMovies = [];
-
-// Helper functions for JSONBin Sync
-async function getJsonBinData() {
-    if (JSONBIN_API_KEY === 'YOUR_JSONBIN_API_KEY' || JSONBIN_BIN_ID === 'YOUR_JSONBIN_BIN_ID') return null;
-    try {
-        const response = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`, {
-            headers: { 'X-Master-Key': JSONBIN_API_KEY }
-        });
-        const data = await response.json();
-        return data.record || {};
-    } catch(err) {
-        console.error("JSONBin fetch error:", err);
-        return null;
-    }
-}
-
-async function updateJsonBinData(newData) {
-    if (JSONBIN_API_KEY === 'YOUR_JSONBIN_API_KEY' || JSONBIN_BIN_ID === 'YOUR_JSONBIN_BIN_ID') return false;
-    try {
-        await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
-            method: 'PUT',
-            headers: { 
-                'Content-Type': 'application/json',
-                'X-Master-Key': JSONBIN_API_KEY 
-            },
-            body: JSON.stringify(newData)
-        });
-        return true;
-    } catch(err) {
-        console.error("JSONBin update error:", err);
-        return false;
-    }
-}
 
 function generateFourDigitCode() {
     return Math.floor(1000 + Math.random() * 9000).toString();
@@ -92,7 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initWatchHistory();
 });
 
-// Initialize Watch History from localStorage and JSONBin
+// Initialize Watch History from localStorage and Firebase
 async function initWatchHistory() {
     // Read from local storage first for speed
     const localHistory = JSON.parse(localStorage.getItem('watchedMovies') || '[]');
@@ -102,13 +97,24 @@ async function initWatchHistory() {
         loadBecauseYouWatched();
     }
 
-    // Sync from shared JSONBin 
-    const binData = await getJsonBinData();
-    if (binData && binData.watchHistory) {
-        watchedMovies = binData.watchHistory;
-        localStorage.setItem('watchedMovies', JSON.stringify(watchedMovies));
-        renderWatchedMovies();
-        loadBecauseYouWatched();
+    // Sync from Firebase Realtime Database (Global Shared Watch History)
+    try {
+        const dbRef = ref(db);
+        const snapshot = await get(child(dbRef, `watchHistory`));
+        if (snapshot.exists()) {
+            const data = snapshot.val();
+            const fbMovies = Object.values(data);
+            if (fbMovies.length > 0) {
+                // Sort by watchedAt timestamp just in case
+                fbMovies.sort((a, b) => b.watchedAt - a.watchedAt);
+                watchedMovies = fbMovies;
+                localStorage.setItem('watchedMovies', JSON.stringify(watchedMovies));
+                renderWatchedMovies();
+                loadBecauseYouWatched();
+            }
+        }
+    } catch(err) {
+        console.error("Firebase watchHistory fetch error:", err);
     }
 }
 
@@ -348,7 +354,6 @@ function createChartItem(movie, rank) {
     const posterHTML = movie.poster_path 
         ? `<img src="${IMG_URL}${movie.poster_path}" alt="${movie.title}" class="chart-poster" onclick="window.open('https://www.themoviedb.org/movie/${movie.id}', '_blank')">`
         : `<div class="no-poster chart-no-poster" onclick="window.open('https://www.themoviedb.org/movie/${movie.id}', '_blank')">
-              🎬
               <p>${movie.title}</p>
            </div>`;
         
@@ -360,7 +365,7 @@ function createChartItem(movie, rank) {
         ${posterHTML}
         <div class="chart-details">
             <div class="chart-title" onclick="window.open('https://www.themoviedb.org/movie/${movie.id}', '_blank')">${movie.title}</div>
-            <div class="chart-meta">${year} • ⭐ ${rating}</div>
+            <div class="chart-meta">${year} • ${rating}</div>
         </div>
     `;
     
@@ -382,17 +387,14 @@ async function generateFriendCode() {
 
     const fourDigitCode = generateFourDigitCode();
     
-    const binData = await getJsonBinData() || { codes: {}, watchHistory: [] };
-    if (!binData.codes) binData.codes = {};
-    
-    binData.codes[fourDigitCode] = selectedGenres;
-    
-    const success = await updateJsonBinData(binData);
-    if(success) {
+    try {
+        await set(ref(db, "friendCodes/" + fourDigitCode), {
+            genres: selectedGenres,
+            createdAt: Date.now()
+        });
         codeSpan.textContent = fourDigitCode;
-    } else {
-        // Fallback if API keys not set
-        console.warn('JSONBin API keys not set. Falling back to local storage (only works on this device).');
+    } catch (error) {
+        console.error("Firebase generateFriendCode error:", error);
         codeSpan.textContent = fourDigitCode + " (Local Only)";
         localStorage.setItem('local_friend_code_' + fourDigitCode, JSON.stringify(selectedGenres));
     }
@@ -407,12 +409,20 @@ async function useFriendCode() {
 
     let genreIds = null;
     
-    // Fetch from JSONBin
-    const binData = await getJsonBinData();
-    if (binData && binData.codes && binData.codes[codeInput]) {
-        genreIds = binData.codes[codeInput];
-    } else {
-        // Fallback local check
+    try {
+        const dbRef = ref(db);
+        const snapshot = await get(child(dbRef, `friendCodes/${codeInput}`));
+        if (snapshot.exists()) {
+            genreIds = snapshot.val().genres;
+        } else {
+            // Fallback local check
+            const localData = localStorage.getItem('local_friend_code_' + codeInput);
+            if (localData) {
+                genreIds = JSON.parse(localData);
+            }
+        }
+    } catch (error) {
+        console.error("Firebase useFriendCode error:", error);
         const localData = localStorage.getItem('local_friend_code_' + codeInput);
         if (localData) {
             genreIds = JSON.parse(localData);
@@ -448,10 +458,18 @@ async function markAsWatched(movie) {
         renderWatchedMovies();
         loadBecauseYouWatched();
 
-        // Sync to JSONBin for cross-device shared history
-        const binData = await getJsonBinData() || { codes: {}, watchHistory: [] };
-        binData.watchHistory = watchedMovies;
-        await updateJsonBinData(binData);
+        // Sync to Firebase for cross-device shared history
+        try {
+            await set(ref(db, "watchHistory/" + movie.id), {
+                id: movie.id,
+                title: movie.title,
+                poster: movie.poster_path || "",
+                genres: movie.genre_ids || [],
+                watchedAt: Date.now()
+            });
+        } catch (error) {
+            console.error("Firebase markAsWatched error:", error);
+        }
     }
 }
 
@@ -505,7 +523,6 @@ function createMovieCard(movie, isWatchedList = false) {
     const posterHTML = movie.poster_path 
         ? `<img src="${IMG_URL}${movie.poster_path}" alt="${movie.title}" class="movie-poster" onclick="window.open('https://www.themoviedb.org/movie/${movie.id}', '_blank')">`
         : `<div class="no-poster" onclick="window.open('https://www.themoviedb.org/movie/${movie.id}', '_blank')">
-              🎬
               <p>${movie.title}</p>
            </div>`;
         
@@ -522,9 +539,9 @@ function createMovieCard(movie, isWatchedList = false) {
         <div class="movie-info">
             <div class="movie-title" onclick="window.open('https://www.themoviedb.org/movie/${movie.id}', '_blank')">${movie.title}</div>
             <div class="movie-meta">${year}</div>
-            <div><span class="movie-rating">⭐ ${rating}</span></div>
+            <div><span class="movie-rating">${rating}</span></div>
             <div class="movie-genres">${genres}</div>
-            ${!isWatchedList ? `<button class="watched-btn" data-id="${movie.id}">Mark as Watched</button>` : '<button class="watched-btn watched" disabled>Watched ✓</button>'}
+            ${!isWatchedList ? `<button class="watched-btn" data-id="${movie.id}">Mark as Watched</button>` : '<button class="watched-btn watched" disabled>Watched</button>'}
         </div>
     `;
 
@@ -532,7 +549,7 @@ function createMovieCard(movie, isWatchedList = false) {
         const watchBtn = card.querySelector('.watched-btn');
         watchBtn.addEventListener('click', () => {
             markAsWatched(movie);
-            watchBtn.textContent = 'Watched ✓';
+            watchBtn.textContent = 'Watched';
             watchBtn.classList.add('watched');
             watchBtn.disabled = true;
         });
