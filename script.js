@@ -1,5 +1,5 @@
 // Global API Key - Replace with your actual TMDB API key
-const API_KEY = '99134078b2f14cae69a98ffb4884afed';
+const TMDB_API_KEY = '99134078b2f14cae69a98ffb4884afed';
 const BASE_URL = 'https://api.themoviedb.org/3';
 const IMG_URL = 'https://image.tmdb.org/t/p/w500';
 
@@ -89,7 +89,7 @@ function getSafeDiscoverUrl(randomizePage = false) {
     const page = randomizePage ? Math.floor(Math.random() * 3) + 1 : 1;
     // include_adult=false removes explicit content
     // primary_release_date.gte=2022-01-01 to only show recent movies
-    return `${BASE_URL}/discover/movie?api_key=${API_KEY}&with_original_language=hi&include_adult=false&primary_release_date.gte=2022-01-01&language=en-US&certification_country=IN&certification.lte=UA&page=${page}`;
+    return `${BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&with_original_language=hi&include_adult=false&primary_release_date.gte=2022-01-01&language=en-US&certification_country=IN&certification.lte=UA&page=${page}`;
 }
 
 // Initialize the page
@@ -251,7 +251,7 @@ function showNoResults(containerId) {
 function searchMovies(query) {
     showLoading('search-results');
     // Added include_adult=false to search
-    fetch(`${BASE_URL}/search/movie?api_key=${API_KEY}&query=${encodeURIComponent(query)}&include_adult=false&with_original_language=hi&language=en-US&certification_country=IN`)
+    fetch(`${BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false&with_original_language=hi&language=en-US&certification_country=IN`)
         .then(response => response.json())
         .then(data => {
             if (data.results) {
@@ -316,10 +316,11 @@ function filterByRating(minRating) {
 // 5. Load Trending Movies
 function loadTrending() {
     showLoading('trending-results');
-    fetch(`${getSafeDiscoverUrl(true)}&sort_by=popularity.desc`)
+    fetch(`${BASE_URL}/trending/movie/week?api_key=${TMDB_API_KEY}&language=en-US`)
         .then(response => response.json())
         .then(data => {
-            displayMovies(data.results, 'trending-results');
+            const hindiTrending = data.results.filter(movie => movie.original_language === 'hi');
+            displayMovies(hindiTrending, 'trending-results');
         })
         .catch(error => {
             console.error('Error loading trending:', error);
@@ -336,8 +337,8 @@ function loadTrending() {
 // 5b. Load Top Charts
 function loadTopCharts() {
     showLoading('top-charts-results');
-    // Top charts uses 2022-01-01 as minimum date, vote_count 300, Indian posters
-    const url = `${BASE_URL}/discover/movie?api_key=${API_KEY}&with_original_language=hi&include_adult=false&primary_release_date.gte=2022-01-01&vote_count.gte=300&sort_by=vote_average.desc&language=en-US&certification_country=IN&certification.lte=UA&page=1`;
+    // Top charts uses 2020-01-01 as minimum date, vote_count 300
+    const url = `${BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&with_original_language=hi&sort_by=vote_average.desc&vote_count.gte=300&primary_release_date.gte=2020-01-01&language=en-US&include_adult=false`;
     
     fetch(url)
         .then(response => response.json())
