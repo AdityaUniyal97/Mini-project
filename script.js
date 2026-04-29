@@ -39,6 +39,23 @@ const db = firebase.database();
 // Global state for watched movies
 let watchedMovies = [];
 
+// Helper to show Firebase permission banner
+function showFirebasePermissionBanner() {
+    if (document.getElementById('firebase-permission-banner')) return;
+    const banner = document.createElement('div');
+    banner.id = 'firebase-permission-banner';
+    banner.style.backgroundColor = '#ff4444';
+    banner.style.color = 'white';
+    banner.style.padding = '15px';
+    banner.style.textAlign = 'center';
+    banner.style.position = 'fixed';
+    banner.style.top = '0';
+    banner.style.width = '100%';
+    banner.style.zIndex = '9999';
+    banner.innerHTML = '<strong>Firebase Permission Denied!</strong><br>Please go to Firebase Console &rarr; Realtime Database &rarr; Rules, and set <code>".read": true</code> and <code>".write": true</code> so data can load and save. <button onclick="this.parentElement.remove()" style="margin-left: 15px; padding: 5px 10px; cursor: pointer; color: black;">Close</button>';
+    document.body.prepend(banner);
+}
+
 function generateFourDigitCode() {
     return Math.floor(1000 + Math.random() * 9000).toString();
 }
@@ -111,6 +128,10 @@ async function initWatchHistory() {
         }
     } catch(err) {
         console.error("Firebase watchHistory fetch error:", err);
+        if (err.message && err.message.includes("Permission denied")) {
+            console.error("FIREBASE SETUP NEEDED: Please go to Firebase Console -> Realtime Database -> Rules, and set .read and .write to true.");
+            showFirebasePermissionBanner();
+        }
     }
 }
 
@@ -302,7 +323,13 @@ function loadTrending() {
         })
         .catch(error => {
             console.error('Error loading trending:', error);
-            showNoResults('trending-results');
+            if (error.message && error.message.includes("Failed to fetch")) {
+                console.error("Fetch failed. If you are using an ad-blocker (like uBlock Origin or Brave Shields), it might be blocking TMDB API requests. Please disable it for this site.");
+                const container = document.getElementById('trending-results');
+                if (container) container.innerHTML = '<p class="no-results">Network error: Failed to fetch movies. Please check your internet connection or disable any ad-blockers/shields.</p>';
+            } else {
+                showNoResults('trending-results');
+            }
         });
 }
 
@@ -392,6 +419,7 @@ async function generateFriendCode() {
     } catch (error) {
         console.error("Firebase generateFriendCode error:", error);
         codeSpan.textContent = "Error generating code. Check console.";
+        if (error.message && error.message.includes("Permission denied")) showFirebasePermissionBanner();
     }
 }
 
@@ -417,6 +445,7 @@ async function useFriendCode() {
         console.error("Firebase useFriendCode error:", error);
         alert('Error validating code.');
         showNoResults('friends-results');
+        if (error.message && error.message.includes("Permission denied")) showFirebasePermissionBanner();
         return;
     }
 
@@ -457,6 +486,7 @@ async function markAsWatched(movie) {
             });
         } catch (error) {
             console.error("Firebase markAsWatched error:", error);
+            if (error.message && error.message.includes("Permission denied")) showFirebasePermissionBanner();
         }
     }
 }
