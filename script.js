@@ -3,8 +3,53 @@ const API_KEY = '99134078b2f14cae69a98ffb4884afed';
 const BASE_URL = 'https://api.themoviedb.org/3';
 const IMG_URL = 'https://image.tmdb.org/t/p/w500';
 
-// Global state for watched movies (session only)
+// JSONBin for Cross-Device Sync
+// Steps to use cross-device sync:
+// 1. Go to jsonbin.io, sign up for free
+// 2. Get your JSONBin API Key and put it below
+// 3. Create a new empty bin with just {} as content and put its Bin ID below
+const JSONBIN_API_KEY = 'YOUR_JSONBIN_API_KEY'; 
+const JSONBIN_BIN_ID = 'YOUR_JSONBIN_BIN_ID';
+
+// Global state for watched movies
 let watchedMovies = [];
+
+// Helper functions for JSONBin Sync
+async function getJsonBinData() {
+    if (JSONBIN_API_KEY === 'YOUR_JSONBIN_API_KEY' || JSONBIN_BIN_ID === 'YOUR_JSONBIN_BIN_ID') return null;
+    try {
+        const response = await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}/latest`, {
+            headers: { 'X-Master-Key': JSONBIN_API_KEY }
+        });
+        const data = await response.json();
+        return data.record || {};
+    } catch(err) {
+        console.error("JSONBin fetch error:", err);
+        return null;
+    }
+}
+
+async function updateJsonBinData(newData) {
+    if (JSONBIN_API_KEY === 'YOUR_JSONBIN_API_KEY' || JSONBIN_BIN_ID === 'YOUR_JSONBIN_BIN_ID') return false;
+    try {
+        await fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN_ID}`, {
+            method: 'PUT',
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-Master-Key': JSONBIN_API_KEY 
+            },
+            body: JSON.stringify(newData)
+        });
+        return true;
+    } catch(err) {
+        console.error("JSONBin update error:", err);
+        return false;
+    }
+}
+
+function generateFourDigitCode() {
+    return Math.floor(1000 + Math.random() * 9000).toString();
+}
 
 // Genre mapping for TMDB
 const genreMap = {
@@ -35,7 +80,7 @@ function getSafeDiscoverUrl(randomizePage = false) {
     const page = randomizePage ? Math.floor(Math.random() * 3) + 1 : 1;
     // include_adult=false removes explicit content
     // primary_release_date.gte=2022-01-01 to only show recent movies
-    return `${BASE_URL}/discover/movie?api_key=${API_KEY}&with_original_language=hi&include_adult=false&primary_release_date.gte=2022-01-01&page=${page}`;
+    return `${BASE_URL}/discover/movie?api_key=${API_KEY}&with_original_language=hi&include_adult=false&primary_release_date.gte=2022-01-01&language=en-US&certification_country=IN&certification.lte=UA&page=${page}`;
 }
 
 // Initialize the page
@@ -44,7 +89,28 @@ document.addEventListener('DOMContentLoaded', () => {
     loadTrending();
     setupEventListeners();
     loadSavedFilters();
+    initWatchHistory();
 });
+
+// Initialize Watch History from localStorage and JSONBin
+async function initWatchHistory() {
+    // Read from local storage first for speed
+    const localHistory = JSON.parse(localStorage.getItem('watchedMovies') || '[]');
+    if (localHistory.length > 0) {
+        watchedMovies = localHistory;
+        renderWatchedMovies();
+        loadBecauseYouWatched();
+    }
+
+    // Sync from shared JSONBin 
+    const binData = await getJsonBinData();
+    if (binData && binData.watchHistory) {
+        watchedMovies = binData.watchHistory;
+        localStorage.setItem('watchedMovies', JSON.stringify(watchedMovies));
+        renderWatchedMovies();
+        loadBecauseYouWatched();
+    }
+}
 
 // Load saved filters on page refresh
 function loadSavedFilters() {
@@ -162,7 +228,7 @@ function showNoResults(containerId) {
 function searchMovies(query) {
     showLoading('search-results');
     // Added include_adult=false to search
-    fetch(`${BASE_URL}/search/movie?api_key=${API_KEY}&query=${encodeURIComponent(query)}&include_adult=false`)
+    fetch(`${BASE_URL}/search/movie?api_key=${API_KEY}&query=${encodeURIComponent(query)}&include_adult=false&with_original_language=hi&language=en-US&certification_country=IN`)
         .then(response => response.json())
         .then(data => {
             if (data.results) {
@@ -241,8 +307,8 @@ function loadTrending() {
 // 5b. Load Top Charts
 function loadTopCharts() {
     showLoading('top-charts-results');
-    // Top charts uses 2020-01-01 as minimum date, ignoring the 2022 global filter
-    const url = `${BASE_URL}/discover/movie?api_key=${API_KEY}&with_original_language=hi&include_adult=false&primary_release_date.gte=2020-01-01&vote_count.gte=1000&sort_by=vote_average.desc&page=1`;
+    // Top charts uses 2022-01-01 as minimum date, vote_count 300, Indian posters
+    const url = `${BASE_URL}/discover/movie?api_key=${API_KEY}&with_original_language=hi&include_adult=false&primary_release_date.gte=2022-01-01&vote_count.gte=300&sort_by=vote_average.desc&language=en-US&certification_country=IN&certification.lte=UA&page=1`;
     
     fetch(url)
         .then(response => response.json())
@@ -279,16 +345,19 @@ function createChartItem(movie, rank) {
     const item = document.createElement('div');
     item.className = 'chart-item';
     
-    const posterPath = movie.poster_path 
-        ? `${IMG_URL}${movie.poster_path}` 
-        : 'https://via.placeholder.com/60x90?text=No+Poster';
+    const posterHTML = movie.poster_path 
+        ? `<img src="${IMG_URL}${movie.poster_path}" alt="${movie.title}" class="chart-poster" onclick="window.open('https://www.themoviedb.org/movie/${movie.id}', '_blank')">`
+        : `<div class="no-poster chart-no-poster" onclick="window.open('https://www.themoviedb.org/movie/${movie.id}', '_blank')">
+              🎬
+              <p>${movie.title}</p>
+           </div>`;
         
     const year = movie.release_date ? movie.release_date.substring(0, 4) : 'N/A';
     const rating = movie.vote_average ? movie.vote_average.toFixed(1) : 'NR';
     
     item.innerHTML = `
         <div class="chart-rank">#${rank}</div>
-        <img src="${posterPath}" alt="${movie.title}" class="chart-poster" onclick="window.open('https://www.themoviedb.org/movie/${movie.id}', '_blank')">
+        ${posterHTML}
         <div class="chart-details">
             <div class="chart-title" onclick="window.open('https://www.themoviedb.org/movie/${movie.id}', '_blank')">${movie.title}</div>
             <div class="chart-meta">${year} • ⭐ ${rating}</div>
@@ -299,7 +368,7 @@ function createChartItem(movie, rank) {
 }
 
 // 6a. Generate Friend Code
-function generateFriendCode() {
+async function generateFriendCode() {
     const checkboxes = document.querySelectorAll('.genre-checkbox:checked');
     const selectedGenres = Array.from(checkboxes).map(cb => cb.value);
     
@@ -308,47 +377,81 @@ function generateFriendCode() {
         return;
     }
 
-    const jsonString = JSON.stringify(selectedGenres);
-    const base64Code = btoa(jsonString);
+    const codeSpan = document.getElementById('generated-code');
+    codeSpan.textContent = "Generating...";
+
+    const fourDigitCode = generateFourDigitCode();
     
-    document.getElementById('generated-code').textContent = base64Code;
+    const binData = await getJsonBinData() || { codes: {}, watchHistory: [] };
+    if (!binData.codes) binData.codes = {};
+    
+    binData.codes[fourDigitCode] = selectedGenres;
+    
+    const success = await updateJsonBinData(binData);
+    if(success) {
+        codeSpan.textContent = fourDigitCode;
+    } else {
+        // Fallback if API keys not set
+        console.warn('JSONBin API keys not set. Falling back to local storage (only works on this device).');
+        codeSpan.textContent = fourDigitCode + " (Local Only)";
+        localStorage.setItem('local_friend_code_' + fourDigitCode, JSON.stringify(selectedGenres));
+    }
 }
 
 // 6b. Use Friend Code
-function useFriendCode() {
-    const codeInput = document.getElementById('friend-code-input').value;
+async function useFriendCode() {
+    const codeInput = document.getElementById('friend-code-input').value.trim();
     if (!codeInput) return;
 
-    try {
-        const jsonString = atob(codeInput);
-        const genreIds = JSON.parse(jsonString);
-        
-        if (Array.isArray(genreIds) && genreIds.length > 0) {
-            const genresString = genreIds.join('|');
-            showLoading('friends-results');
-            
-            fetch(`${getSafeDiscoverUrl(false)}&with_genres=${genresString}&sort_by=popularity.desc`)
-                .then(response => response.json())
-                .then(data => {
-                    displayMovies(data.results, 'friends-results');
-                })
-                .catch(error => {
-                    console.error('Error fetching friends movies:', error);
-                    showNoResults('friends-results');
-                });
+    showLoading('friends-results');
+
+    let genreIds = null;
+    
+    // Fetch from JSONBin
+    const binData = await getJsonBinData();
+    if (binData && binData.codes && binData.codes[codeInput]) {
+        genreIds = binData.codes[codeInput];
+    } else {
+        // Fallback local check
+        const localData = localStorage.getItem('local_friend_code_' + codeInput);
+        if (localData) {
+            genreIds = JSON.parse(localData);
         }
-    } catch (error) {
-        alert('Invalid code! Please check and try again.');
+    }
+
+    if (Array.isArray(genreIds) && genreIds.length > 0) {
+        const genresString = genreIds.join('|');
+        fetch(`${getSafeDiscoverUrl(false)}&with_genres=${genresString}&sort_by=popularity.desc`)
+            .then(response => response.json())
+            .then(data => {
+                displayMovies(data.results, 'friends-results');
+            })
+            .catch(error => {
+                console.error('Error fetching friends movies:', error);
+                showNoResults('friends-results');
+            });
+    } else {
+        alert('Invalid or missing code! Please check and try again.');
+        showNoResults('friends-results');
     }
 }
 
 // 7a. Mark as Watched
-function markAsWatched(movie) {
+async function markAsWatched(movie) {
     // Check if already watched
     if (!watchedMovies.find(m => m.id === movie.id)) {
         watchedMovies.push(movie);
+        
+        // Save to local storage for instant sync on same device
+        localStorage.setItem('watchedMovies', JSON.stringify(watchedMovies));
+        
         renderWatchedMovies();
         loadBecauseYouWatched();
+
+        // Sync to JSONBin for cross-device shared history
+        const binData = await getJsonBinData() || { codes: {}, watchHistory: [] };
+        binData.watchHistory = watchedMovies;
+        await updateJsonBinData(binData);
     }
 }
 
@@ -399,9 +502,12 @@ function createMovieCard(movie, isWatchedList = false) {
     const card = document.createElement('div');
     card.className = 'movie-card';
     
-    const posterPath = movie.poster_path 
-        ? `${IMG_URL}${movie.poster_path}` 
-        : 'https://via.placeholder.com/500x750?text=No+Poster';
+    const posterHTML = movie.poster_path 
+        ? `<img src="${IMG_URL}${movie.poster_path}" alt="${movie.title}" class="movie-poster" onclick="window.open('https://www.themoviedb.org/movie/${movie.id}', '_blank')">`
+        : `<div class="no-poster" onclick="window.open('https://www.themoviedb.org/movie/${movie.id}', '_blank')">
+              🎬
+              <p>${movie.title}</p>
+           </div>`;
         
     const year = movie.release_date ? movie.release_date.substring(0, 4) : 'N/A';
     const rating = movie.vote_average ? movie.vote_average.toFixed(1) : 'NR';
@@ -412,7 +518,7 @@ function createMovieCard(movie, isWatchedList = false) {
         : 'Unknown';
 
     card.innerHTML = `
-        <img src="${posterPath}" alt="${movie.title}" class="movie-poster" onclick="window.open('https://www.themoviedb.org/movie/${movie.id}', '_blank')">
+        ${posterHTML}
         <div class="movie-info">
             <div class="movie-title" onclick="window.open('https://www.themoviedb.org/movie/${movie.id}', '_blank')">${movie.title}</div>
             <div class="movie-meta">${year}</div>

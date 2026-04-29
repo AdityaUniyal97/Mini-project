@@ -142,6 +142,43 @@ button:active {
     cursor: pointer;
 }
 
+.no-poster {
+    background-color: #333;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 1rem;
+    color: #fff;
+    font-size: 1.1rem;
+    font-weight: 500;
+    cursor: pointer;
+    width: 100%;
+    height: 300px; /* same as movie-poster */
+}
+.no-poster p {
+    margin-top: 10px;
+    font-size: 0.9rem;
+    word-break: break-word;
+}
+.chart-no-poster {
+    width: 60px;
+    height: 90px;
+    font-size: 0.6rem;
+    padding: 0.5rem;
+    margin-right: 1.5rem;
+    border-radius: 4px;
+}
+.chart-no-poster p {
+    font-size: 0.5rem;
+    margin-top: 5px;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+}
+
 .movie-info {
     padding: 1rem;
     flex-grow: 1;
@@ -300,13 +337,7 @@ button:active {
     font-family: monospace;
 }
 
-footer {
-    text-align: center;
-    padding: 2rem;
-    background-color: var(--card-bg);
-    margin-top: 2rem;
-    border-top: 1px solid #333;
-}
+
 
 @media (max-width: 768px) {
     .nav-links {
