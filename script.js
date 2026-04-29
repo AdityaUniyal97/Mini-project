@@ -21,23 +21,20 @@ Firebase Database Rules to Set
 }
 */
 
-// Firebase Config
-import { initializeApp } from "firebase/app";
-import { getDatabase, ref, set, get, child } from "firebase/database";
-
 // Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyBNhTPANQvIYIO5RsmKucbSNpiLLAYt1o4",
   authDomain: "gen-lang-client-0934972792.firebaseapp.com",
-  databaseURL: "https://gen-lang-client-0934972792-default-rtdb.firebaseio.com/",
+  databaseURL: "https://gen-lang-client-0934972792-default-rtdb.firebaseio.com",
   projectId: "gen-lang-client-0934972792",
   storageBucket: "gen-lang-client-0934972792.firebasestorage.app",
   messagingSenderId: "319110590864",
   appId: "1:319110590864:web:c8af07d71683bfa6808315"
 };
 
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app); // Using Realtime Database
+// Initialize Firebase using compat syntax
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
 
 // Global state for watched movies
 let watchedMovies = [];
@@ -99,8 +96,7 @@ async function initWatchHistory() {
 
     // Sync from Firebase Realtime Database (Global Shared Watch History)
     try {
-        const dbRef = ref(db);
-        const snapshot = await get(child(dbRef, `watchHistory`));
+        const snapshot = await db.ref("watchHistory/").get();
         if (snapshot.exists()) {
             const data = snapshot.val();
             const fbMovies = Object.values(data);
@@ -388,15 +384,14 @@ async function generateFriendCode() {
     const fourDigitCode = generateFourDigitCode();
     
     try {
-        await set(ref(db, "friendCodes/" + fourDigitCode), {
+        await db.ref("friendCodes/" + fourDigitCode).set({
             genres: selectedGenres,
             createdAt: Date.now()
         });
         codeSpan.textContent = fourDigitCode;
     } catch (error) {
         console.error("Firebase generateFriendCode error:", error);
-        codeSpan.textContent = fourDigitCode + " (Local Only)";
-        localStorage.setItem('local_friend_code_' + fourDigitCode, JSON.stringify(selectedGenres));
+        codeSpan.textContent = "Error generating code. Check console.";
     }
 }
 
@@ -410,23 +405,19 @@ async function useFriendCode() {
     let genreIds = null;
     
     try {
-        const dbRef = ref(db);
-        const snapshot = await get(child(dbRef, `friendCodes/${codeInput}`));
+        const snapshot = await db.ref("friendCodes/" + codeInput).get();
         if (snapshot.exists()) {
             genreIds = snapshot.val().genres;
         } else {
-            // Fallback local check
-            const localData = localStorage.getItem('local_friend_code_' + codeInput);
-            if (localData) {
-                genreIds = JSON.parse(localData);
-            }
+            alert('Invalid or missing code! Please check and try again.');
+            showNoResults('friends-results');
+            return;
         }
     } catch (error) {
         console.error("Firebase useFriendCode error:", error);
-        const localData = localStorage.getItem('local_friend_code_' + codeInput);
-        if (localData) {
-            genreIds = JSON.parse(localData);
-        }
+        alert('Error validating code.');
+        showNoResults('friends-results');
+        return;
     }
 
     if (Array.isArray(genreIds) && genreIds.length > 0) {
@@ -440,9 +431,6 @@ async function useFriendCode() {
                 console.error('Error fetching friends movies:', error);
                 showNoResults('friends-results');
             });
-    } else {
-        alert('Invalid or missing code! Please check and try again.');
-        showNoResults('friends-results');
     }
 }
 
@@ -460,7 +448,7 @@ async function markAsWatched(movie) {
 
         // Sync to Firebase for cross-device shared history
         try {
-            await set(ref(db, "watchHistory/" + movie.id), {
+            await db.ref("watchHistory/" + movie.id).set({
                 id: movie.id,
                 title: movie.title,
                 poster: movie.poster_path || "",
