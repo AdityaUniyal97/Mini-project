@@ -336,11 +336,13 @@ function filterByRating(minRating) {
 // 5. Load Trending Movies
 function loadTrending() {
     showLoading('trending-results');
-    fetch(`${BASE_URL}/trending/movie/week?api_key=${TMDB_API_KEY}&language=en-US&include_adult=false&certification_country=IN&certification.lte=UA`)
+    // Get popular Hindi movies (as alternative to trending since trending endpoint doesn't support with_original_language)
+    const url = `${BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&with_original_language=hi&sort_by=popularity.desc&primary_release_date.gte=2023-01-01&language=en-US&include_adult=false`;
+    
+    fetch(url)
         .then(response => response.json())
         .then(data => {
-            const hindiTrending = data.results.filter(movie => movie.original_language === 'hi');
-            displayMovies(hindiTrending, 'trending-results');
+            displayMovies(data.results, 'trending-results');
         })
         .catch(error => {
             console.error('Error loading trending:', error);
