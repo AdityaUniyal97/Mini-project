@@ -233,6 +233,26 @@ function setupEventListeners() {
     // 6. Friends Feature
     document.getElementById('generate-code-btn').addEventListener('click', generateFriendCode);
     document.getElementById('use-code-btn').addEventListener('click', useFriendCode);
+
+    // 7. Clear History
+    const clearAllBtn = document.getElementById('clear-all-history');
+    if (clearAllBtn) {
+        clearAllBtn.addEventListener('click', async () => {
+            if (confirm("Are you sure you want to clear your entire watch history?")) {
+                try {
+                    await db.ref("watchHistory/").remove();
+                    watchedMovies = [];
+                    localStorage.setItem('watchedMovies', JSON.stringify([]));
+                    renderWatchedMovies();
+                    const bkwContainer = document.getElementById('because-watched-results');
+                    if (bkwContainer) bkwContainer.innerHTML = '';
+                } catch (error) {
+                    console.error("Firebase clearAllHistory error:", error);
+                    if (error.message && error.message.includes("Permission denied")) showFirebasePermissionBanner();
+                }
+            }
+        });
+    }
 }
 
 // Helper to show loading state
@@ -251,7 +271,7 @@ function showNoResults(containerId) {
 function searchMovies(query) {
     showLoading('search-results');
     // Added include_adult=false to search
-    fetch(`${BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false&with_original_language=hi&language=en-US&certification_country=IN`)
+    fetch(`${BASE_URL}/search/movie?api_key=${TMDB_API_KEY}&query=${encodeURIComponent(query)}&include_adult=false&with_original_language=hi&language=en-US&certification_country=IN&certification.lte=UA`)
         .then(response => response.json())
         .then(data => {
             if (data.results) {
@@ -316,7 +336,7 @@ function filterByRating(minRating) {
 // 5. Load Trending Movies
 function loadTrending() {
     showLoading('trending-results');
-    fetch(`${BASE_URL}/trending/movie/week?api_key=${TMDB_API_KEY}&language=en-US`)
+    fetch(`${BASE_URL}/trending/movie/week?api_key=${TMDB_API_KEY}&language=en-US&include_adult=false&certification_country=IN&certification.lte=UA`)
         .then(response => response.json())
         .then(data => {
             const hindiTrending = data.results.filter(movie => movie.original_language === 'hi');
@@ -337,8 +357,8 @@ function loadTrending() {
 // 5b. Load Top Charts
 function loadTopCharts() {
     showLoading('top-charts-results');
-    // Top charts uses 2020-01-01 as minimum date, vote_count 300
-    const url = `${BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&with_original_language=hi&sort_by=vote_average.desc&vote_count.gte=300&primary_release_date.gte=2020-01-01&language=en-US&include_adult=false`;
+    // Top charts uses 2020-01-01 as minimum date, vote_count 200
+    const url = `${BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&with_original_language=hi&sort_by=vote_average.desc&vote_count.gte=200&primary_release_date.gte=2015-01-01&language=en-US&include_adult=false`;
     
     fetch(url)
         .then(response => response.json())
@@ -481,8 +501,10 @@ async function markAsWatched(movie) {
             await db.ref("watchHistory/" + movie.id).set({
                 id: movie.id,
                 title: movie.title,
-                poster: movie.poster_path || "",
+                poster: movie.poster_path ? "https://image.tmdb.org/t/p/w500" + movie.poster_path : "",
                 genres: movie.genre_ids || [],
+                rating: movie.vote_average,
+                year: movie.release_date ? movie.release_date.split("-")[0] : "N/A",
                 watchedAt: Date.now()
             });
         } catch (error) {
@@ -539,11 +561,23 @@ function createMovieCard(movie, isWatchedList = false) {
     const card = document.createElement('div');
     card.className = 'movie-card';
     
-    const posterHTML = movie.poster_path 
-        ? `<img src="${IMG_URL}${movie.poster_path}" alt="${movie.title}" class="movie-poster" onclick="window.open('https://www.themoviedb.org/movie/${movie.id}', '_blank')">`
-        : `<div class="no-poster" onclick="window.open('https://www.themoviedb.org/movie/${movie.id}', '_blank')">
+    const hasPoster = movie.poster || movie.poster_path;
+    let posterSRC = "";
+    if (movie.poster) {
+        posterSRC = movie.poster;
+    } else if (movie.poster_path) {
+        posterSRC = `${IMG_URL}${movie.poster_path}`;
+    }
+
+    // if no poster show clean placeholder
+    let posterHTML = "";
+    if (hasPoster) {
+        posterHTML = `<img src="${posterSRC}" alt="${movie.title}" class="movie-poster" onclick="window.open('https://www.themoviedb.org/movie/${movie.id}', '_blank')">`;
+    } else {
+        posterHTML = `<div class="no-poster" onclick="window.open('https://www.themoviedb.org/movie/${movie.id}', '_blank')">
               <p>${movie.title}</p>
            </div>`;
+    }
         
     const year = movie.release_date ? movie.release_date.substring(0, 4) : 'N/A';
     const rating = movie.vote_average ? movie.vote_average.toFixed(1) : 'NR';
@@ -555,6 +589,7 @@ function createMovieCard(movie, isWatchedList = false) {
 
     card.innerHTML = `
         ${posterHTML}
+        ${isWatchedList ? `<button class="clear-btn" data-id="${movie.id}">X</button>` : ''}
         <div class="movie-info">
             <div class="movie-title" onclick="window.open('https://www.themoviedb.org/movie/${movie.id}', '_blank')">${movie.title}</div>
             <div class="movie-meta">${year}</div>
@@ -572,6 +607,22 @@ function createMovieCard(movie, isWatchedList = false) {
             watchBtn.classList.add('watched');
             watchBtn.disabled = true;
         });
+    } else {
+        const clearBtn = card.querySelector('.clear-btn');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', async () => {
+                try {
+                    await db.ref("watchHistory/" + movie.id).remove();
+                    watchedMovies = watchedMovies.filter(m => m.id !== movie.id);
+                    localStorage.setItem('watchedMovies', JSON.stringify(watchedMovies));
+                    renderWatchedMovies();
+                    loadBecauseYouWatched();
+                } catch (error) {
+                    console.error("Firebase clearHistory error:", error);
+                    if (error.message && error.message.includes("Permission denied")) showFirebasePermissionBanner();
+                }
+            });
+        }
     }
 
     return card;

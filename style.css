@@ -339,36 +339,67 @@ button:active {
 
 
 
+.clear-btn {
+    background: red;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    font-size: 14px;
+    cursor: pointer;
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 @media (max-width: 768px) {
-    .nav-links {
-        display: none;
+    nav {
+        flex-direction: column;
+        padding: 10px;
     }
     
+    .nav-links {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+        padding: 0;
+    }
+
     .movie-grid {
         grid-template-columns: repeat(2, 1fr);
-        gap: 1rem;
+        gap: 10px;
     }
     
-    .movie-poster {
-        height: 200px;
+    .movie-card {
+        font-size: 12px;
+    }
+
+    .movie-card img {
+        height: 180px;
     }
     
-    .movie-title {
-        font-size: 0.9rem;
+    section {
+        padding: 15px;
     }
-    
-    .movie-meta, .movie-genres {
-        font-size: 0.75rem;
+
+    h2 {
+        font-size: 18px;
     }
-    
-    .movie-rating {
-        font-size: 0.7rem;
-        padding: 0.1rem 0.3rem;
-    }
-    
+
     .controls {
-        flex-direction: column;
-        align-items: stretch;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    button {
+        font-size: 12px;
+        padding: 8px 12px;
     }
     
     .time-btn, .genre-btn {
