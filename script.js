@@ -94,12 +94,43 @@ function getSafeDiscoverUrl(randomizePage = false) {
 
 // Initialize the page
 document.addEventListener('DOMContentLoaded', () => {
+    const isLoggedIn = sessionStorage.getItem('isLoggedIn');
+    if (isLoggedIn === 'true') {
+        initApp();
+    } else {
+        setupLogin();
+    }
+});
+
+function setupLogin() {
+    const loginBtn = document.getElementById('login-btn');
+    const userIn = document.getElementById('username');
+    const passIn = document.getElementById('password');
+    const errorMsg = document.getElementById('login-error');
+
+    loginBtn.addEventListener('click', () => {
+        if (userIn.value.trim().toLowerCase() === 'aditya' && passIn.value === '123') {
+            sessionStorage.setItem('isLoggedIn', 'true');
+            initApp();
+        } else {
+            errorMsg.style.display = 'block';
+        }
+    });
+
+    passIn.addEventListener('keypress', (e) => {
+        if(e.key === 'Enter') loginBtn.click();
+    });
+}
+
+function initApp() {
+    document.getElementById('login-container').style.display = 'none';
+    document.getElementById('app-content').style.display = 'block';
     loadTopCharts();
     loadTrending();
     setupEventListeners();
     loadSavedFilters();
     initWatchHistory();
-});
+}
 
 // Initialize Watch History from localStorage and Firebase
 async function initWatchHistory() {
@@ -336,8 +367,8 @@ function filterByRating(minRating) {
 // 5. Load Trending Movies
 function loadTrending() {
     showLoading('trending-results');
-    // Get popular Hindi movies (as alternative to trending since trending endpoint doesn't support with_original_language)
-    const url = `${BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&with_original_language=hi&sort_by=popularity.desc&primary_release_date.gte=2023-01-01&language=en-US&include_adult=false`;
+    // Get popular Anime movies (as requested, replacing unreliable trending)
+    const url = `${BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&with_original_language=ja&with_genres=16&sort_by=popularity.desc&language=en-US&include_adult=false`;
     
     fetch(url)
         .then(response => response.json())
@@ -359,8 +390,8 @@ function loadTrending() {
 // 5b. Load Top Charts
 function loadTopCharts() {
     showLoading('top-charts-results');
-    // Top charts uses 2020-01-01 as minimum date, vote_count 200
-    const url = `${BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&with_original_language=hi&sort_by=vote_average.desc&vote_count.gte=200&primary_release_date.gte=2015-01-01&language=en-US&include_adult=false`;
+    // Top charts uses top rated anime movies as requested
+    const url = `${BASE_URL}/discover/movie?api_key=${TMDB_API_KEY}&with_original_language=ja&with_genres=16&sort_by=vote_average.desc&vote_count.gte=500&language=en-US&include_adult=false`;
     
     fetch(url)
         .then(response => response.json())
@@ -646,7 +677,10 @@ function displayMovies(movies, containerId, isWatchedList = false) {
         return !title.includes('mimi cucu') && 
                !title.includes('ullu') && 
                !title.includes('charmsukh') &&
-               !title.includes('palang tod');
+               !title.includes('palang tod') &&
+               !title.includes('ggs') &&
+               !title.includes('tu yaa main') &&
+               !title.includes('ganteng');
     });
 
     if (safeMovies.length === 0) {
